@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, io::Write};
+use std::io::Write;
 
 use crate::{bytes::parse_bytes, DecodeError, EncodeError};
 #[derive(Clone, Debug, PartialEq)]
@@ -79,13 +79,21 @@ impl Extension {
                 antenna_gain_db,
                 antenna_directivity,
             } => {
-                let power_value = { ((*power_watts as f64).sqrt() as u8).to_string() };
+                let sqrt_power = (*power_watts as f64).sqrt();
+                if sqrt_power < 0.0 || sqrt_power > 255.0 {
+                    return Err(EncodeError::InvalidExtension(self.clone()));
+                }
+                let power_value = (sqrt_power as u8).to_string();
 
+                let h_div = *antenna_height_feet / 10;
+                if h_div == 0 {
+                    return Err(EncodeError::InvalidExtension(self.clone()));
+                }
                 let height_value = {
-                    ((((antenna_height_feet / 10) as f64).log2()) as u8)
+                    ((h_div as f64).log2() as u8)
                         .checked_add(48)
                         .ok_or_else(|| EncodeError::InvalidExtension(self.clone()))?
-                } as char; // sqrt(H/10)
+                } as char;
 
                 let gain_value = if (0..9).contains(antenna_gain_db) {
                     Ok(antenna_gain_db.to_string())
@@ -115,11 +123,15 @@ impl Extension {
                     Err(EncodeError::InvalidExtension(self.clone()))
                 }?;
 
+                let h_div = *antenna_height_feet / 10;
+                if h_div == 0 {
+                    return Err(EncodeError::InvalidExtension(self.clone()));
+                }
                 let height_value = {
-                    ((((antenna_height_feet / 10) as f64).log2()) as u8)
+                    ((h_div as f64).log2() as u8)
                         .checked_add(48)
                         .ok_or_else(|| EncodeError::InvalidExtension(self.clone()))?
-                } as char; // sqrt(H/10)
+                } as char;
 
                 let gain_value = if (0..9).contains(antenna_gain_db) {
                     Ok(antenna_gain_db.to_string())

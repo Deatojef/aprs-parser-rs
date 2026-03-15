@@ -6,18 +6,17 @@
 //! Reports are intended primarily for plotting the positions of moving objects
 //! (e.g. spacecraft, storms, marathon runners without trackers).
 
-use std::convert::TryFrom;
 use std::io::Write;
 
-use Callsign;
-use DecodeError;
+use crate::Callsign;
+use crate::DecodeError;
 
-use EncodeError;
-use Timestamp;
+use crate::EncodeError;
+use crate::Timestamp;
 
-use AprsCst;
-use Extension;
-use Position;
+use crate::AprsCst;
+use crate::Extension;
+use crate::Position;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AprsObject {
@@ -136,8 +135,8 @@ impl AprsObject {
         let mut name = self.name.clone();
         name.truncate(9);
         write!(buf, ";")?;
-        buf.write_all(&self.name)?;
-        for _ in self.name.len()..9 {
+        buf.write_all(&name)?;
+        for _ in name.len()..9 {
             buf.write_all(b" ")?; // pad out the remainder
         }
 

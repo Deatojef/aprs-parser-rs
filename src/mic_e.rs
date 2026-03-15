@@ -1,14 +1,13 @@
-use std::convert::TryInto;
 use std::io::Write;
 //use std::any::type_name;
 
-use Callsign;
-use DecodeError;
-use EncodeError;
-use Latitude;
-use Longitude;
-use Precision;
-use AprsAltitude;
+use crate::Callsign;
+use crate::DecodeError;
+use crate::EncodeError;
+use crate::Latitude;
+use crate::Longitude;
+use crate::Precision;
+use crate::AprsAltitude;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Message {
@@ -208,7 +207,7 @@ impl AprsMicE {
             altitude = alt
         }
 
-        let comment = rest_of_packet[comment_start..].to_vec();
+        let comment = rest_of_packet.get(comment_start..).unwrap_or(&[]).to_vec();
 
         Ok(Self {
             latitude,
@@ -256,15 +255,13 @@ impl AprsMicE {
         Ok(())
     }
 
-    pub fn encode_destination(&self) -> Callsign {
+    pub fn encode_destination(&self) -> Result<Callsign, EncodeError> {
         let mut encoded_lat = vec![];
-        // safe to do
-        // can only fail from a write error
-        // which is impossible because we're writing to an array
         self.latitude
-            .encode_uncompressed(&mut encoded_lat, self.precision)
-            .unwrap();
-        assert_eq!(8, encoded_lat.len());
+            .encode_uncompressed(&mut encoded_lat, self.precision)?;
+        if encoded_lat.len() != 8 {
+            return Err(EncodeError::InvalidData);
+        }
 
         let lat_dir = if *self.latitude >= 0.0 {
             LatDir::North
@@ -297,17 +294,16 @@ impl AprsMicE {
             encode_bit_5(encoded_lat[6], long_dir),
         ];
 
-        // Safe to unwrap because we know all bytes are valid ASCII
-        Callsign::new_no_ssid(String::from_utf8(bytes).unwrap())
+        let s = String::from_utf8(bytes).map_err(|_| EncodeError::InvalidData)?;
+        Ok(Callsign::new_no_ssid(s))
     }
 
     fn encode_longitude<W: Write>(&self, w: &mut W) -> Result<(), EncodeError> {
         let (d, m, h, _) = self.longitude.dmh();
 
-        // safe to unwrap - all values must be less than 255
-        let d: u8 = d.try_into().unwrap();
-        let m: u8 = m.try_into().unwrap();
-        let h: u8 = h.try_into().unwrap();
+        let d: u8 = d.try_into().map_err(|_| EncodeError::InvalidData)?;
+        let m: u8 = m.try_into().map_err(|_| EncodeError::InvalidData)?;
+        let h: u8 = h.try_into().map_err(|_| EncodeError::InvalidData)?;
 
         let d = match d {
             0..=9 => d + 90,
@@ -327,7 +323,7 @@ impl AprsMicE {
     }
 
     fn encode_speed_and_course<W: Write>(&self, w: &mut W) -> Result<(), EncodeError> {
-        let tens_knots: u8 = (self.speed.knots() / 10).try_into().unwrap();
+        let tens_knots: u8 = (self.speed.knots() / 10).try_into().map_err(|_| EncodeError::InvalidData)?;
         let units_knots = self.speed.knots() % 10;
 
         let hundreds_course = self.course.degrees() / 100;
@@ -338,8 +334,8 @@ impl AprsMicE {
             _ => tens_knots,
         };
 
-        let dc: u8 = (units_knots * 10 + hundreds_course + 4).try_into().unwrap();
-        let se: u8 = (units_course).try_into().unwrap();
+        let dc: u8 = (units_knots * 10 + hundreds_course + 4).try_into().map_err(|_| EncodeError::InvalidData)?;
+        let se: u8 = (units_course).try_into().map_err(|_| EncodeError::InvalidData)?;
 
         w.write_all(&[sp + 28, dc + 28, se + 28])?;
 
@@ -366,10 +362,10 @@ impl AprsMicE {
                 let amount = quotient * divsor;
 
                 // the quotient + 33 results in an ascii char for the encoding
-                let c = quotient + 33;
+                let c: u8 = (quotient + 33).try_into().map_err(|_| EncodeError::InvalidData)?;
 
                 // add the character to the vector
-                b.push(c as u8);
+                b.push(c);
 
                 // decrement the dividend
                 dividend -= amount;
@@ -569,15 +565,13 @@ fn decode_altitude(data: &[u8]) -> (Option<usize>, Option<AprsAltitude>) {
         // only proceed if there are at least 3 characters to the left of the '}'
         if idx >= 3 {
 
-            let mut alt: i32  = 0;
-            let mut startingidx = 0;
-            if idx - 3 > 0 {
-                startingidx = idx - 3;
-            }
+            let mut alt: i32 = 0;
+            let startingidx = idx.saturating_sub(3);
 
             // loop over each character to the left of the '}'
             for i in (startingidx..idx).rev() {
-                alt += ((data[i] - 33) as i32) * (91_u32.pow((idx-i-1) as u32) as i32);
+                let byte_val = data[i].saturating_sub(33) as i32;
+                alt += byte_val * (91_u32.pow((idx - i - 1) as u32) as i32);
             }
 
             (Some(idx), Some(AprsAltitude::new((((alt - 10000) as f64) * 3.28084).round())))
@@ -731,7 +725,7 @@ mod tests {
 
         // skip first byte as it's the backtick
         assert_eq!(information, &re_encoded[1..]);
-        assert_eq!(to, data.encode_destination());
+        assert_eq!(to, data.encode_destination().unwrap());
     }
 
     #[test]
@@ -741,6 +735,6 @@ mod tests {
 
         let data = AprsMicE::decode(information, to.clone(), true).unwrap();
 
-        assert_eq!(to, data.encode_destination());
+        assert_eq!(to, data.encode_destination().unwrap());
     }
 }

@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use EncodeError;
+use crate::EncodeError;
 
 pub(crate) fn encode_ascii<W: Write>(
     val: f64,

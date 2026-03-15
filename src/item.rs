@@ -100,7 +100,7 @@ impl AprsItem {
         let mut name = self.name.clone();
         name.truncate(9);
         write!(buf, ")")?;
-        buf.write_all(&self.name)?;
+        buf.write_all(&name)?;
 
         write!(buf, "{}", if self.live { '!' } else { ' ' })?;
 

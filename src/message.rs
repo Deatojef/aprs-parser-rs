@@ -1,8 +1,8 @@
 use std::io::Write;
 
-use Callsign;
-use DecodeError;
-use EncodeError;
+use crate::Callsign;
+use crate::DecodeError;
+use crate::EncodeError;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AprsMessage {

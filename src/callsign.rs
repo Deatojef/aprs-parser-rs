@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::io::{self, Write};
 
-use EncodeError;
+use crate::EncodeError;
 
 pub enum CallsignField {
     Destination,

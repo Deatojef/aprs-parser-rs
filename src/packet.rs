@@ -1,15 +1,15 @@
 use std::borrow::Cow;
 use std::io::Write;
 
-use callsign::CallsignField;
-use AprsMessage;
-use AprsMicE;
-use AprsPosition;
-use AprsStatus;
-use Callsign;
-use DecodeError;
-use EncodeError;
-use Via;
+use crate::callsign::CallsignField;
+use crate::AprsMessage;
+use crate::AprsMicE;
+use crate::AprsPosition;
+use crate::AprsStatus;
+use crate::Callsign;
+use crate::DecodeError;
+use crate::EncodeError;
+use crate::Via;
 
 use crate::item::AprsItem;
 use crate::object::AprsObject;
@@ -91,7 +91,7 @@ impl AprsPacket {
 
         self.from.encode_textual(false, buf)?;
         write!(buf, ">")?;
-        self.data.dest_field().encode_textual(false, buf)?;
+        self.data.dest_field()?.encode_textual(false, buf)?;
         for v in &via {
             write!(buf, ",")?;
             v.encode_textual(buf)?;
@@ -153,7 +153,7 @@ impl AprsPacket {
     pub fn encode_ax25<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         // Destination address
         self.data
-            .dest_field()
+            .dest_field()?
             .encode_ax25(buf, CallsignField::Destination, true)?;
 
         let via_calls: Vec<_> = self.via.iter().filter_map(|v| v.callsign()).collect();
@@ -207,16 +207,16 @@ impl AprsData {
         }
     }
 
-    fn dest_field(&self) -> Cow<'_, Callsign> {
-        match self {
+    fn dest_field(&self) -> Result<Cow<'_, Callsign>, EncodeError> {
+        Ok(match self {
             AprsData::Position(p) => Cow::Borrowed(&p.to),
             AprsData::Message(m) => Cow::Borrowed(&m.to),
             AprsData::Status(s) => Cow::Borrowed(&s.to),
-            AprsData::MicE(m) => Cow::Owned(m.encode_destination()),
+            AprsData::MicE(m) => Cow::Owned(m.encode_destination()?),
             AprsData::Unknown(to) => Cow::Borrowed(to),
             AprsData::Object(o) => Cow::Borrowed(&o.to),
             AprsData::Item(i) => Cow::Borrowed(&i.to),
-        }
+        })
     }
 
     fn decode(s: &[u8], to: Callsign) -> Result<Self, DecodeError> {
@@ -260,14 +260,14 @@ mod tests {
     use crate::components::position::Position;
 
     use super::*;
-    use mic_e::{Course, Message, Speed};
-    use AprsCst;
-    use Latitude;
-    use Longitude;
-    use Precision;
-    use QConstruct;
-    use Timestamp;
-    use AprsAltitude;
+    use crate::mic_e::{Course, Message, Speed};
+    use crate::AprsCst;
+    use crate::Latitude;
+    use crate::Longitude;
+    use crate::Precision;
+    use crate::QConstruct;
+    use crate::Timestamp;
+    use crate::AprsAltitude;
 
     #[test]
     fn parse() {

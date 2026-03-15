@@ -1,15 +1,14 @@
-use std::convert::TryFrom;
 use std::io::Write;
 
-use Callsign;
-use DecodeError;
-use EncodeError;
-use Timestamp;
-use Extension;
+use crate::Callsign;
+use crate::DecodeError;
+use crate::EncodeError;
+use crate::Timestamp;
+use crate::Extension;
 
-use Position;
+use crate::Position;
 
-use AprsCst;
+use crate::AprsCst;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct AprsPosition {
@@ -91,12 +90,12 @@ impl AprsPosition {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use compression_type::{GpsFix, NmeaSource, Origin};
-    use AprsAltitude;
-    use AprsCompressedCs;
-    use AprsCompressionType;
-    use AprsCourseSpeed;
-    use AprsRadioRange;
+    use crate::compression_type::{GpsFix, NmeaSource, Origin};
+    use crate::AprsAltitude;
+    use crate::AprsCompressedCs;
+    use crate::AprsCompressionType;
+    use crate::AprsCourseSpeed;
+    use crate::AprsRadioRange;
 
     fn default_callsign() -> Callsign {
         Callsign::new_no_ssid("VE9")

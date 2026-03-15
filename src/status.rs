@@ -7,14 +7,13 @@
 //! - ">120503hFatal error"             (report with timestamp in HMS format)
 //! - ">281205zSystem will shutdown"    (report with timestamp in DHM format)
 
-use std::convert::TryFrom;
 use std::io::Write;
 
-use Callsign;
-use DecodeError;
-use DhmTimestamp;
-use EncodeError;
-use Timestamp;
+use crate::Callsign;
+use crate::DecodeError;
+use crate::DhmTimestamp;
+use crate::EncodeError;
+use crate::Timestamp;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AprsStatus {

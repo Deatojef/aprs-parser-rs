@@ -1,9 +1,8 @@
-use bytes::parse_bytes;
-use std::convert::TryFrom;
+use crate::bytes::parse_bytes;
 use std::io::Write;
 
-use DecodeError;
-use EncodeError;
+use crate::DecodeError;
+use crate::EncodeError;
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 pub struct DhmTimestamp(u8, u8, u8);
@@ -192,8 +191,6 @@ mod tests {
 
     #[test]
     fn convert_timestamp_to_dhm_timestamp_success() {
-        use std::convert::TryInto;
-
         let timestamp = Timestamp::new_dhm(65, 43, 21).unwrap();
         assert_eq!(
             DhmTimestamp::new(65, 43, 21).unwrap(),
@@ -203,8 +200,6 @@ mod tests {
 
     #[test]
     fn convert_timestamp_to_dhm_timestamp_failure() {
-        use std::convert::TryInto;
-
         let timestamp = Timestamp::new_hms(65, 43, 21).unwrap();
         let dhm: Result<DhmTimestamp, ()> = timestamp.try_into();
         assert_eq!(Err(()), dhm);

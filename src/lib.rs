@@ -57,8 +57,6 @@
 // `!(-90. ..=90.).contains(&value)` seems worse than `value > 90. || value < -90.`
 #![allow(clippy::manual_range_contains)]
 
-extern crate thiserror;
-
 #[cfg(test)]
 #[macro_use]
 extern crate approx;

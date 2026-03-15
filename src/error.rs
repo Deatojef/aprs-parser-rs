@@ -1,4 +1,4 @@
-use Callsign;
+use crate::Callsign;
 
 use crate::Extension;
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]

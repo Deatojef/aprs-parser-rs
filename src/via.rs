@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use Callsign;
+use crate::Callsign;
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum Via {

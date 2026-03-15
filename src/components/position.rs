@@ -6,7 +6,7 @@ use std::{
 
 use crate::{AprsCompressedCs, AprsCompressionType, DecodeError, EncodeError};
 
-use AprsAltitude;
+use crate::AprsAltitude;
 
 use super::lonlat::{Latitude, Longitude, Precision};
 
@@ -163,10 +163,7 @@ impl Position {
 
             // get the altitude value
             let altitude: Option<AprsAltitude> = match cst {
-                AprsCst::CompressedSome{cs, ..} => match cs {
-                    AprsCompressedCs::Altitude(a) => Some(a),
-                    _ => None,
-                },
+                AprsCst::CompressedSome{cs: AprsCompressedCs::Altitude(a), ..} => Some(a),
                 _ => None,
             };
 

@@ -1,10 +1,10 @@
 use std::io::Write;
 
-use base91;
-use compression_type::NmeaSource;
-use AprsCompressionType;
-use DecodeError;
-use EncodeError;
+use crate::base91;
+use crate::compression_type::NmeaSource;
+use crate::AprsCompressionType;
+use crate::DecodeError;
+use crate::EncodeError;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum AprsCompressedCs {

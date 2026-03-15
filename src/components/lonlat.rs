@@ -1,10 +1,10 @@
 use std::io::Write;
 use std::ops::{Deref, RangeInclusive};
 
-use base91;
-use bytes::parse_bytes;
-use DecodeError;
-use EncodeError;
+use crate::base91;
+use crate::bytes::parse_bytes;
+use crate::DecodeError;
+use crate::EncodeError;
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
 pub enum Precision {
@@ -369,8 +369,8 @@ mod tests {
 
     #[test]
     fn test_longitude_out_of_bounds() {
-        assert_eq!(None, Latitude::new(180.1));
-        assert_eq!(None, Latitude::new(-180.1));
+        assert_eq!(None, Longitude::new(180.1));
+        assert_eq!(None, Longitude::new(-180.1));
     }
 
     #[test]
