@@ -1,13 +1,13 @@
 use std::io::Write;
 //use std::any::type_name;
 
+use crate::AprsAltitude;
 use crate::Callsign;
 use crate::DecodeError;
 use crate::EncodeError;
 use crate::Latitude;
 use crate::Longitude;
 use crate::Precision;
-use crate::AprsAltitude;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Message {
@@ -151,10 +151,10 @@ pub struct AprsMicE {
 
     pub current: bool,
     pub altitude: Option<AprsAltitude>,
-    pub radio_mfg: Option<Vec<u8>>,  // some radios, notably Kenwood use a radio identification char
-                                 // between the symbol code and the Mic-e status field.  However, 
-                                 // also using this as a catch-all for any data between the symbol
-                                 // code and any altitude value found.
+    pub radio_mfg: Option<Vec<u8>>, // some radios, notably Kenwood use a radio identification char
+                                    // between the symbol code and the Mic-e status field.  However,
+                                    // also using this as a catch-all for any data between the symbol
+                                    // code and any altitude value found.
 }
 
 impl AprsMicE {
@@ -163,8 +163,8 @@ impl AprsMicE {
             decode_callsign(&to).ok_or(DecodeError::InvalidMicEDestination(to))?;
 
         // The 'b' argument actually begins at the 2nd byte within the info field (the caller
-        // strips that first byte off for us).  That first byte is the Data Type ID and denotes 
-        // what type of content the APRS packet contains (e.g. position report, telemetry, Mic-E, etc.). 
+        // strips that first byte off for us).  That first byte is the Data Type ID and denotes
+        // what type of content the APRS packet contains (e.g. position report, telemetry, Mic-E, etc.).
         let info = b
             .get(0..8)
             .ok_or_else(|| DecodeError::InvalidMicEInformation(b.to_vec()))?;
@@ -190,17 +190,16 @@ impl AprsMicE {
 
         // if the rest of the packet (i.e. the information field) is present, then try and decode
         if rest_of_packet.len() > 2 {
-
             // is an altitude embedded within the status field?
             let (idx, alt) = decode_altitude(&rest_of_packet[0..]);
             comment_start = match idx {
                 Some(i) => {
                     if i > 3 {
                         // some radios insert a manufacturer character at the beginning of the status field (e.g kenwood).
-                        radio_mfg = Some(rest_of_packet[0..i-3].to_vec());
+                        radio_mfg = Some(rest_of_packet[0..i - 3].to_vec());
                     }
-                    i+1
-                },
+                    i + 1
+                }
                 None => 0,
             };
 
@@ -323,7 +322,9 @@ impl AprsMicE {
     }
 
     fn encode_speed_and_course<W: Write>(&self, w: &mut W) -> Result<(), EncodeError> {
-        let tens_knots: u8 = (self.speed.knots() / 10).try_into().map_err(|_| EncodeError::InvalidData)?;
+        let tens_knots: u8 = (self.speed.knots() / 10)
+            .try_into()
+            .map_err(|_| EncodeError::InvalidData)?;
         let units_knots = self.speed.knots() % 10;
 
         let hundreds_course = self.course.degrees() / 100;
@@ -334,8 +335,12 @@ impl AprsMicE {
             _ => tens_knots,
         };
 
-        let dc: u8 = (units_knots * 10 + hundreds_course + 4).try_into().map_err(|_| EncodeError::InvalidData)?;
-        let se: u8 = (units_course).try_into().map_err(|_| EncodeError::InvalidData)?;
+        let dc: u8 = (units_knots * 10 + hundreds_course + 4)
+            .try_into()
+            .map_err(|_| EncodeError::InvalidData)?;
+        let se: u8 = (units_course)
+            .try_into()
+            .map_err(|_| EncodeError::InvalidData)?;
 
         w.write_all(&[sp + 28, dc + 28, se + 28])?;
 
@@ -343,10 +348,8 @@ impl AprsMicE {
     }
 
     fn encode_altitude<W: Write>(&self, w: &mut W) -> Result<(), EncodeError> {
-
         // if there's an altitude value present
         if let Some(a) = self.altitude {
-
             // the altitude in meters +10000 and rounded to the nearest integer.
             let mut dividend = (a.altitude_meters() + 10000.0).round() as u32;
 
@@ -362,14 +365,16 @@ impl AprsMicE {
                 let amount = quotient * divsor;
 
                 // the quotient + 33 results in an ascii char for the encoding
-                let c: u8 = (quotient + 33).try_into().map_err(|_| EncodeError::InvalidData)?;
+                let c: u8 = (quotient + 33)
+                    .try_into()
+                    .map_err(|_| EncodeError::InvalidData)?;
 
                 // add the character to the vector
                 b.push(c);
 
                 // decrement the dividend
                 dividend -= amount;
-                
+
                 // decrement the loop index and continue
                 i -= 1;
             }
@@ -561,10 +566,8 @@ fn decode_altitude(data: &[u8]) -> (Option<usize>, Option<AprsAltitude>) {
 
     // find the first position of a '}' character
     if let Some(idx) = data.iter().position(|&byte| byte == b'}') {
-
         // only proceed if there are at least 3 characters to the left of the '}'
         if idx >= 3 {
-
             let mut alt: i32 = 0;
             let startingidx = idx.saturating_sub(3);
 
@@ -574,13 +577,16 @@ fn decode_altitude(data: &[u8]) -> (Option<usize>, Option<AprsAltitude>) {
                 alt += byte_val * (91_u32.pow((idx - i - 1) as u32) as i32);
             }
 
-            (Some(idx), Some(AprsAltitude::new((((alt - 10000) as f64) * 3.28084).round())))
-        }
-        else {
+            (
+                Some(idx),
+                Some(AprsAltitude::new(
+                    (((alt - 10000) as f64) * 3.28084).round(),
+                )),
+            )
+        } else {
             (None, None)
         }
-    }
-    else {
+    } else {
         (None, None)
     }
 }

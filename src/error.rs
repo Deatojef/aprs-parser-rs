@@ -56,6 +56,13 @@ pub enum DecodeError {
 
     #[error("Invalid Extension Area value: {0:?}")]
     InvalidExtensionArea(Vec<u8>),
+
+    #[error("Invalid Weather data: {0:?}")]
+    InvalidWeather(Vec<u8>),
+    #[error("Invalid Telemetry data: {0:?}")]
+    InvalidTelemetry(Vec<u8>),
+    #[error("Invalid Grid Locator: {0:?}")]
+    InvalidGridLocator(Vec<u8>),
 }
 
 #[derive(Debug, thiserror::Error)]

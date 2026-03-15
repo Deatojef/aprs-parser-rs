@@ -3,11 +3,12 @@ use std::io::Write;
 use crate::Callsign;
 use crate::DecodeError;
 use crate::EncodeError;
-use crate::Timestamp;
 use crate::Extension;
+use crate::Timestamp;
 
 use crate::Position;
 
+use crate::weather::AprsWeather;
 use crate::AprsCst;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -18,6 +19,7 @@ pub struct AprsPosition {
     pub position: Position,
     pub comment: Vec<u8>,
     pub extension: Option<Extension>,
+    pub weather: Option<AprsWeather>,
 }
 
 impl AprsPosition {
@@ -50,6 +52,17 @@ impl AprsPosition {
         // try and parse comment field for an extension
         let extension = Extension::decode(&comment).ok();
 
+        // Parse weather data if symbol is weather station (/_)
+        let weather = if position.symbol_table == '/' && position.symbol_code == '_' {
+            // Weather data in comment starts after extension (7 bytes for dir/speed)
+            let weather_start = if extension.is_some() { 7 } else { 0 };
+            comment
+                .get(weather_start..)
+                .and_then(|b| AprsWeather::decode(b).ok())
+        } else {
+            None
+        };
+
         Ok(Self {
             to,
             timestamp,
@@ -57,9 +70,9 @@ impl AprsPosition {
             position,
             comment,
             extension,
+            weather,
         })
     }
-
 
     pub fn encode<W: Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         let sym = match (self.timestamp.is_some(), self.messaging_supported) {

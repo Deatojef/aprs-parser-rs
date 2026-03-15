@@ -43,9 +43,11 @@
 //!                             symbol_code: '^',
 //!                             cst: AprsCst::Uncompressed,
 //!                             altitude: Some(AprsAltitude::new(3054.0)),
+//!                             dao: None,
 //!                         },
 //!                         comment: b"322/103/A=003054".to_vec(),
 //!                         extension: Some(DirectionSpeed { direction_degrees: 322, speed_knots: 3 }),
+//!                         weather: None,
 //!                     }
 //!                 )
 //!             }
@@ -68,13 +70,19 @@ mod compressed_cs;
 pub mod compression_type;
 mod error;
 
+mod grid;
 mod item;
 mod message;
 pub mod mic_e;
+mod nmea;
 mod object;
 mod packet;
 mod position;
 mod status;
+mod telemetry;
+mod third_party;
+mod user_defined;
+pub mod weather;
 
 mod components;
 mod utils;
@@ -92,13 +100,19 @@ pub use compressed_cs::{AprsAltitude, AprsCompressedCs, AprsCourseSpeed, AprsRad
 pub use compression_type::AprsCompressionType;
 pub use error::{DecodeError, EncodeError};
 
+pub use grid::AprsGridLocator;
 pub use message::AprsMessage;
 pub use mic_e::AprsMicE;
+pub use nmea::AprsNmea;
 pub use object::AprsObject;
 pub use packet::{AprsData, AprsPacket};
 pub use position::AprsPosition;
 pub use status::AprsStatus;
+pub use telemetry::AprsTelemetry;
+pub use third_party::AprsThirdParty;
+pub use user_defined::AprsUserDefined;
 pub use via::{QConstruct, Via};
+pub use weather::{AprsPositionlessWeather, AprsWeather};
 
 #[cfg(test)]
 mod tests {

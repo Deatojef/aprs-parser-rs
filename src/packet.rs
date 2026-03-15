@@ -11,8 +11,14 @@ use crate::DecodeError;
 use crate::EncodeError;
 use crate::Via;
 
+use crate::grid::AprsGridLocator;
 use crate::item::AprsItem;
+use crate::nmea::AprsNmea;
 use crate::object::AprsObject;
+use crate::telemetry::AprsTelemetry;
+use crate::third_party::AprsThirdParty;
+use crate::user_defined::AprsUserDefined;
+use crate::weather::AprsPositionlessWeather;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct AprsPacket {
@@ -191,6 +197,12 @@ pub enum AprsData {
     MicE(AprsMicE),
     Object(AprsObject),
     Item(AprsItem),
+    Weather(AprsPositionlessWeather),
+    Telemetry(AprsTelemetry),
+    GridLocator(AprsGridLocator),
+    Nmea(AprsNmea),
+    ThirdParty(AprsThirdParty),
+    UserDefined(AprsUserDefined),
     Unknown(Callsign),
 }
 
@@ -203,6 +215,12 @@ impl AprsData {
             AprsData::MicE(_) => None,
             AprsData::Object(_) => None,
             AprsData::Item(_) => None,
+            AprsData::Weather(w) => Some(&w.to),
+            AprsData::Telemetry(t) => Some(&t.to),
+            AprsData::GridLocator(g) => Some(&g.to),
+            AprsData::Nmea(n) => Some(&n.to),
+            AprsData::ThirdParty(t) => Some(&t.to),
+            AprsData::UserDefined(u) => Some(&u.to),
             AprsData::Unknown(to) => Some(to),
         }
     }
@@ -216,6 +234,12 @@ impl AprsData {
             AprsData::Unknown(to) => Cow::Borrowed(to),
             AprsData::Object(o) => Cow::Borrowed(&o.to),
             AprsData::Item(i) => Cow::Borrowed(&i.to),
+            AprsData::Weather(w) => Cow::Borrowed(&w.to),
+            AprsData::Telemetry(t) => Cow::Borrowed(&t.to),
+            AprsData::GridLocator(g) => Cow::Borrowed(&g.to),
+            AprsData::Nmea(n) => Cow::Borrowed(&n.to),
+            AprsData::ThirdParty(t) => Cow::Borrowed(&t.to),
+            AprsData::UserDefined(u) => Cow::Borrowed(&u.to),
         })
     }
 
@@ -228,6 +252,12 @@ impl AprsData {
             0x1d | b'\'' => AprsData::MicE(AprsMicE::decode(&s[1..], to, false)?),
             b';' => AprsData::Object(AprsObject::decode(&s[1..], to)?),
             b')' => AprsData::Item(AprsItem::decode(&s[1..], to)?),
+            b'_' => AprsData::Weather(AprsPositionlessWeather::decode(&s[1..], to)?),
+            b'T' => AprsData::Telemetry(AprsTelemetry::decode(&s[1..], to)?),
+            b'[' => AprsData::GridLocator(AprsGridLocator::decode(&s[1..], to)?),
+            b'$' => AprsData::Nmea(AprsNmea::decode(&s[1..], to)),
+            b'}' => AprsData::ThirdParty(AprsThirdParty::decode(&s[1..], to)?),
+            b'{' => AprsData::UserDefined(AprsUserDefined::decode(&s[1..], to)),
             _ => AprsData::Unknown(to),
         })
     }
@@ -248,6 +278,12 @@ impl AprsData {
             }
             Self::Object(o) => o.encode(buf)?,
             Self::Item(i) => i.encode(buf)?,
+            Self::Weather(w) => w.encode(buf)?,
+            Self::Telemetry(t) => t.encode(buf)?,
+            Self::GridLocator(g) => g.encode(buf)?,
+            Self::Nmea(n) => n.encode(buf)?,
+            Self::ThirdParty(t) => t.encode(buf)?,
+            Self::UserDefined(u) => u.encode(buf)?,
             Self::Unknown(_) => return Err(EncodeError::InvalidData),
         }
 
@@ -261,13 +297,13 @@ mod tests {
 
     use super::*;
     use crate::mic_e::{Course, Message, Speed};
+    use crate::AprsAltitude;
     use crate::AprsCst;
     use crate::Latitude;
     use crate::Longitude;
     use crate::Precision;
     use crate::QConstruct;
     use crate::Timestamp;
-    use crate::AprsAltitude;
 
     #[test]
     fn parse() {
@@ -285,8 +321,9 @@ mod tests {
         match result.data {
             AprsData::Position(position) => {
                 assert_eq!(position.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
-                assert_eq!(position.position.latitude.value(), 48.36016666666667);
-                assert_eq!(position.position.longitude.value(), 12.408166666666666);
+                // DAO !W09! refines coordinates beyond base hundredth-minute precision
+                assert_relative_eq!(position.position.latitude.value(), 48.36019413919414);
+                assert_relative_eq!(position.position.longitude.value(), 12.408210622710623);
                 assert_eq!(
                     position.comment,
                     b"322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1"
@@ -430,9 +467,11 @@ mod tests {
                     symbol_code: 'c',
                     cst: AprsCst::Uncompressed,
                     altitude: None,
+                    dao: None,
                 },
                 extension: None,
                 comment: b"Hello world".to_vec(),
+                weather: None,
             }),
         };
 
@@ -461,9 +500,11 @@ mod tests {
                     symbol_code: 'c',
                     cst: AprsCst::Uncompressed,
                     altitude: None,
+                    dao: None,
                 },
                 extension: None,
                 comment: b"Hello world".to_vec(),
+                weather: None,
             }),
         };
 
@@ -582,6 +623,130 @@ mod tests {
             e_packet.encode_ax25(&mut e_ax25).unwrap();
 
             assert_eq!(e_ax25, o_ax25);
+        }
+    }
+
+    /// Verify the parser does not panic on malformed, truncated, or garbage input.
+    /// Every input here should return Err or Ok — never panic.
+    #[test]
+    fn malformed_inputs_no_panic() {
+        let long_input = vec![b'A'; 10000];
+        let inputs: Vec<&[u8]> = vec![
+            // completely empty
+            b"",
+            // no header delimiter
+            b"just some garbage",
+            // no > separator
+            b"NOCALL:!4903.50N/07201.75W-",
+            // empty body
+            b"W5XYZ>APRS:",
+            // colon only
+            b":",
+            // > only
+            b">",
+            // minimal valid-ish structure but empty fields
+            b">:",
+            b"A>B:",
+            // truncated position
+            b"A>B:!49",
+            b"A>B:!4903.50",
+            b"A>B:!4903.50N",
+            b"A>B:!4903.50N/",
+            b"A>B:!4903.50N/072",
+            // truncated compressed position
+            b"A>B:!/AB",
+            b"A>B:!/ABCD#$",
+            // invalid lat/lon values
+            b"A>B:!9903.50N/07201.75W-",
+            b"A>B:!4903.50N/99901.75W-",
+            // truncated mic-e
+            b"A>B:`",
+            b"A>B:`abc",
+            b"A>B:'",
+            // truncated message
+            b"A>B::",
+            b"A>B::DE",
+            // truncated status
+            b"A>B:>",
+            // truncated object
+            b"A>B:;",
+            b"A>B:;OBJ",
+            b"A>B:;OBJNAME  ",
+            // truncated item
+            b"A>B:)",
+            b"A>B:)IT",
+            // truncated weather
+            b"A>B:_",
+            b"A>B:_123",
+            b"A>B:_12345678",
+            // truncated telemetry
+            b"A>B:T",
+            b"A>B:T#",
+            b"A>B:T#001",
+            // truncated grid
+            b"A>B:[",
+            b"A>B:[IO",
+            b"A>B:[IO91",
+            // nmea (should always succeed)
+            b"A>B:$",
+            b"A>B:$GPGGA",
+            // third party with invalid inner
+            b"A>B:}",
+            b"A>B:}garbage",
+            b"A>B:}no-colon-inner",
+            // user defined
+            b"A>B:{",
+            b"A>B:{A",
+            // binary garbage
+            b"\x00\x01\x02\x03\x04\x05",
+            b"\xff\xfe\xfd>APRS:\x00\x01",
+            // very long garbage
+            &long_input,
+            // null bytes throughout
+            b"A\x00B>C\x00D:!\x004903.50N/07201.75W-",
+            // non-ASCII in callsign
+            b"\xc0\xc1>APRS:!4903.50N/07201.75W-",
+            // via path edge cases
+            b"A>B,,:!4903.50N/07201.75W-",
+            b"A>B,,,,,:!4903.50N/07201.75W-",
+            // unknown data type
+            b"A>B:~something",
+            b"A>B:%something",
+            b"A>B:#something",
+            b"A>B:*something",
+            b"A>B:?APRS?",
+            b"A>B:<something",
+        ];
+
+        for input in &inputs {
+            // Should not panic — Ok or Err are both fine
+            let _ = AprsPacket::decode_textual(input);
+        }
+    }
+
+    /// Verify AX.25 decoder doesn't panic on malformed binary input.
+    #[test]
+    fn malformed_ax25_no_panic() {
+        let long_ax25 = vec![0x41; 1000];
+        let inputs: Vec<&[u8]> = vec![
+            b"",
+            b"\x00",
+            &[0u8; 6],
+            &[0u8; 7],
+            &[0u8; 14],
+            &[0u8; 16],
+            // valid length but garbage
+            &[0xFF; 20],
+            // truncated control/protocol
+            &[
+                0x82, 0xa0, 0x9c, 0xaa, 0x62, 0x72, 0xe0, 0xac, 0x8a, 0x72, 0x84, 0x86, 0xa2, 0x60,
+            ],
+            // very long garbage
+            &long_ax25,
+        ];
+
+        for input in &inputs {
+            let _ = AprsPacket::decode_ax25(input);
         }
     }
 

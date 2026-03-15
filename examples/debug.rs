@@ -3,7 +3,6 @@ use aprs_parser::{AprsData, AprsPacket};
 extern crate aprs_parser;
 
 fn main() {
-
     let packets = vec![
         r##"WA6IFI-12>APN391,PVLY,WIDE2-1:!3846.33N110459.55W#PHG3830 WA6IFI W2,COn /A12349"##,
         r##"KC5W>SYSRSQ,W0NED,WIDE1,WIDE2-1:`qXxl -/`_4"##,
@@ -38,12 +37,12 @@ fn main() {
                     if let Some(alt) = pos_packet.position.altitude {
                         println!("ALTITUDE: {}", alt.altitude_feet());
                     }
-                },
+                }
                 AprsData::MicE(mice_packet) => {
                     if let Some(alt) = mice_packet.altitude {
                         println!("ALTITUDE: {}", alt.altitude_feet());
                     }
-                },
+                }
                 _ => println!("Unknown packet"),
             }
         };

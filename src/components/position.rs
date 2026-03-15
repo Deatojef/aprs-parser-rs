@@ -20,6 +20,53 @@ pub enum AprsCst {
     Uncompressed,
 }
 
+/// DAO precision extension parsed from `!DAO!` in the comment field.
+///
+/// When present, DAO refines the latitude and longitude beyond the standard
+/// hundredth-of-a-minute precision:
+/// - **HumanReadable** (`!wXY!`): adds a third decimal digit to the minutes,
+///   giving thousandths-of-a-minute precision (~1.85m).
+/// - **Base91** (`!WXY!`): adds sub-hundredth precision via base-91 encoding,
+///   giving approximately 0.2m precision.
+#[derive(PartialEq, Debug, Clone)]
+pub enum Dao {
+    /// Base-91 encoded extra precision (uppercase letter prefix, e.g. `!W__!`)
+    Base91 { lat_offset: u8, lon_offset: u8 },
+    /// Human-readable extra digit (lowercase letter prefix, e.g. `!w__!`)
+    HumanReadable { lat_digit: u8, lon_digit: u8 },
+}
+
+impl Dao {
+    /// Returns the latitude and longitude adjustments in degrees that this DAO
+    /// extension adds to the base position.
+    ///
+    /// The adjustment is always positive — it represents how far into the
+    /// current hundredth-of-a-minute cell the true position lies.
+    pub fn offsets_degrees(&self) -> (f64, f64) {
+        match self {
+            Dao::HumanReadable {
+                lat_digit,
+                lon_digit,
+            } => {
+                // Each digit adds 0.001 minutes = 0.001/60 degrees
+                let lat_adj = (*lat_digit as f64) / 60_000.0;
+                let lon_adj = (*lon_digit as f64) / 60_000.0;
+                (lat_adj, lon_adj)
+            }
+            Dao::Base91 {
+                lat_offset,
+                lon_offset,
+            } => {
+                // Base-91 value 0..90 maps to 0..0.01 minutes
+                // offset / 91 * 0.01 minutes = offset / 91 / 6000 degrees
+                let lat_adj = (*lat_offset as f64) / (91.0 * 6000.0);
+                let lon_adj = (*lon_offset as f64) / (91.0 * 6000.0);
+                (lat_adj, lon_adj)
+            }
+        }
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub struct Position {
     pub latitude: Latitude,
@@ -29,6 +76,7 @@ pub struct Position {
     pub symbol_code: char,
     pub cst: AprsCst,
     pub altitude: Option<AprsAltitude>,
+    pub dao: Option<Dao>,
 }
 
 impl Position {
@@ -67,11 +115,42 @@ impl Position {
         Ok(())
     }
 
+    /// Parse `!DAO!` pattern from comment data.
+    pub(crate) fn dao_in_comment(data: &[u8]) -> Option<Dao> {
+        // Look for pattern !X__! where X is a letter
+        let s = data;
+        for i in 0..s.len().saturating_sub(4) {
+            if s[i] == b'!' && s.get(i + 4) == Some(&b'!') {
+                let prefix = s[i + 1];
+                let d1 = s[i + 2];
+                let d2 = s[i + 3];
+                if prefix.is_ascii_uppercase() {
+                    // Base-91: characters are in range 0x21..0x7B (33..123)
+                    if d1 >= 0x21 && d1 <= 0x7B && d2 >= 0x21 && d2 <= 0x7B {
+                        return Some(Dao::Base91 {
+                            lat_offset: d1 - 33,
+                            lon_offset: d2 - 33,
+                        });
+                    }
+                } else if prefix.is_ascii_lowercase() {
+                    // Human-readable: digits 0-9
+                    if d1.is_ascii_digit() && d2.is_ascii_digit() {
+                        return Some(Dao::HumanReadable {
+                            lat_digit: d1 - b'0',
+                            lon_digit: d2 - b'0',
+                        });
+                    }
+                }
+            }
+        }
+        None
+    }
+
     pub(crate) fn altitude_in_comment(data: &[u8]) -> Option<AprsAltitude> {
-        // Convert to a string slice. 
+        // Convert to a string slice.
         let s = str::from_utf8(data).ok()?;
 
-        // Find the starting index of the "/A=" substring. 
+        // Find the starting index of the "/A=" substring.
         let start_index = s.find("/A=")?;
 
         // Calculate the index where the number begins.
@@ -81,7 +160,8 @@ impl Position {
         let rest = &s[number_start_index..];
 
         // Find the end of the number by searching for the first non-digit character.
-        let number_end_index = rest.find(|c: char| !c.is_ascii_digit())
+        let number_end_index = rest
+            .find(|c: char| !c.is_ascii_digit())
             .unwrap_or(rest.len());
 
         // Slice the string to get only the number part.
@@ -93,7 +173,6 @@ impl Position {
         // return a new AprsAltitude struct
         Some(AprsAltitude::new(altitude_value as f64))
     }
-
 
     /// this function assumes we are getting the head of a byte list
     /// representing a compressed or uncompressed position
@@ -115,9 +194,27 @@ impl Position {
 
             let symbol_table = b[8] as char;
             let symbol_code = b[18] as char;
-            
+
             // search the comment field for an altitude (e.g. '/A=aaaaaa')
-            let altitude = Position::altitude_in_comment(&b[19..]);
+            let comment_bytes = b.get(19..).unwrap_or_default();
+            let altitude = Position::altitude_in_comment(comment_bytes);
+            let dao = Position::dao_in_comment(comment_bytes);
+
+            // Apply DAO precision offsets to refine lat/lon
+            let (latitude, longitude) = if let Some(ref dao) = dao {
+                let (lat_adj, lon_adj) = dao.offsets_degrees();
+                // Determine sign: offsets are always added in the direction
+                // of the base coordinate's sign
+                let lat_sign = if latitude.value() >= 0.0 { 1.0 } else { -1.0 };
+                let lon_sign = if longitude.value() >= 0.0 { 1.0 } else { -1.0 };
+                let new_lat =
+                    Latitude::new(latitude.value() + lat_sign * lat_adj).unwrap_or(latitude);
+                let new_lon =
+                    Longitude::new(longitude.value() + lon_sign * lon_adj).unwrap_or(longitude);
+                (new_lat, new_lon)
+            } else {
+                (latitude, longitude)
+            };
 
             Ok((
                 b.get(19..),
@@ -129,6 +226,7 @@ impl Position {
                     symbol_table,
                     cst: AprsCst::Uncompressed,
                     altitude,
+                    dao,
                 },
             ))
         } else {
@@ -163,7 +261,10 @@ impl Position {
 
             // get the altitude value
             let altitude: Option<AprsAltitude> = match cst {
-                AprsCst::CompressedSome{cs: AprsCompressedCs::Altitude(a), ..} => Some(a),
+                AprsCst::CompressedSome {
+                    cs: AprsCompressedCs::Altitude(a),
+                    ..
+                } => Some(a),
                 _ => None,
             };
 
@@ -177,6 +278,7 @@ impl Position {
                     symbol_table,
                     cst,
                     altitude,
+                    dao: None,
                 },
             ))
         }
