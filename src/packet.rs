@@ -321,12 +321,68 @@ mod tests {
         match result.data {
             AprsData::Position(position) => {
                 assert_eq!(position.timestamp, Some(Timestamp::HHMMSS(7, 48, 49)));
-                // DAO !W09! refines coordinates beyond base hundredth-minute precision
-                assert_relative_eq!(position.position.latitude.value(), 48.36019413919414);
-                assert_relative_eq!(position.position.longitude.value(), 12.408210622710623);
+                // DAO !W09! (uppercase = human-readable): appends '0' to lat
+                // minutes and '9' to lon minutes, giving 4821.610' / 1224.499'
+                assert_relative_eq!(
+                    position.position.latitude.value(),
+                    48.0 + 21.610 / 60.0
+                );
+                assert_relative_eq!(
+                    position.position.longitude.value(),
+                    12.0 + 24.499 / 60.0
+                );
                 assert_eq!(
                     position.comment,
                     b"322/103/A=003054 !W09! id213D17F2 -039fpm +0.0rot 2.5dB 3e -0.0kHz gps1x1"
+                );
+            }
+            _ => panic!("Unexpected data type"),
+        }
+    }
+
+    #[test]
+    fn parse_dao_human_readable() {
+        // Real-world packet with uppercase-W DAO (human-readable): the digits
+        // '2' and '4' are appended as the third decimal of the minutes.
+        let result = AprsPacket::decode_textual(
+            r"T3ST-13>APTT4,Z,Z,Z,qAO,N0JD:/165502h3936.14N/10401.71WO125/017/A=013073!W24!"
+                .as_bytes(),
+        )
+        .unwrap();
+        match result.data {
+            AprsData::Position(position) => {
+                // 3936.142' N and 10401.714' W
+                assert_relative_eq!(
+                    position.position.latitude.value(),
+                    39.0 + 36.142 / 60.0
+                );
+                assert_relative_eq!(
+                    position.position.longitude.value(),
+                    -(104.0 + 1.714 / 60.0)
+                );
+            }
+            _ => panic!("Unexpected data type"),
+        }
+    }
+
+    #[test]
+    fn parse_dao_base91() {
+        // Lowercase-w DAO is Base-91 encoded. '2' = 50-33 = 17, '4' = 52-33 = 19.
+        // Each unit = 1/91 of 0.01' = 1/546000 of a degree.
+        let result = AprsPacket::decode_textual(
+            r"T3ST-13>APTT4,qAO,N0JD:/165502h3936.14N/10401.71WO125/017/A=013073!w24!"
+                .as_bytes(),
+        )
+        .unwrap();
+        match result.data {
+            AprsData::Position(position) => {
+                assert_relative_eq!(
+                    position.position.latitude.value(),
+                    (39.0 + 36.14 / 60.0) + 17.0 / 546_000.0
+                );
+                assert_relative_eq!(
+                    position.position.longitude.value(),
+                    -((104.0 + 1.71 / 60.0) + 19.0 / 546_000.0)
                 );
             }
             _ => panic!("Unexpected data type"),

@@ -24,15 +24,15 @@ pub enum AprsCst {
 ///
 /// When present, DAO refines the latitude and longitude beyond the standard
 /// hundredth-of-a-minute precision:
-/// - **HumanReadable** (`!wXY!`): adds a third decimal digit to the minutes,
-///   giving thousandths-of-a-minute precision (~1.85m).
-/// - **Base91** (`!WXY!`): adds sub-hundredth precision via base-91 encoding,
-///   giving approximately 0.2m precision.
+/// - **HumanReadable** (`!WXY!`, uppercase datum letter): adds a third decimal
+///   digit to the minutes, giving thousandths-of-a-minute precision (~1.85m).
+/// - **Base91** (`!wxy!`, lowercase datum letter): adds sub-hundredth precision
+///   via base-91 encoding, giving approximately 0.2m precision.
 #[derive(PartialEq, Debug, Clone)]
 pub enum Dao {
-    /// Base-91 encoded extra precision (uppercase letter prefix, e.g. `!W__!`)
+    /// Base-91 encoded extra precision (lowercase letter prefix, e.g. `!w__!`)
     Base91 { lat_offset: u8, lon_offset: u8 },
-    /// Human-readable extra digit (lowercase letter prefix, e.g. `!w__!`)
+    /// Human-readable extra digit (uppercase letter prefix, e.g. `!W__!`)
     HumanReadable { lat_digit: u8, lon_digit: u8 },
 }
 
@@ -125,19 +125,19 @@ impl Position {
                 let d1 = s[i + 2];
                 let d2 = s[i + 3];
                 if prefix.is_ascii_uppercase() {
-                    // Base-91: characters are in range 0x21..0x7B (33..123)
-                    if d1 >= 0x21 && d1 <= 0x7B && d2 >= 0x21 && d2 <= 0x7B {
-                        return Some(Dao::Base91 {
-                            lat_offset: d1 - 33,
-                            lon_offset: d2 - 33,
-                        });
-                    }
-                } else if prefix.is_ascii_lowercase() {
                     // Human-readable: digits 0-9
                     if d1.is_ascii_digit() && d2.is_ascii_digit() {
                         return Some(Dao::HumanReadable {
                             lat_digit: d1 - b'0',
                             lon_digit: d2 - b'0',
+                        });
+                    }
+                } else if prefix.is_ascii_lowercase() {
+                    // Base-91: characters are in range 0x21..0x7B (33..123)
+                    if d1 >= 0x21 && d1 <= 0x7B && d2 >= 0x21 && d2 <= 0x7B {
+                        return Some(Dao::Base91 {
+                            lat_offset: d1 - 33,
+                            lon_offset: d2 - 33,
                         });
                     }
                 }
